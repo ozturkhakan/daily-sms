@@ -3,11 +3,12 @@ name: Galatasaray SMS Servisi
 on:
   schedule:
     - cron: '0 5 * * *'      # Her sabah 08:00 TR — haber bülteni
+    - cron: '0 4 * * *'      # Her sabah 07:00 TR — hava durumu
     - cron: '*/30 * * * *'   # Her 30 dakika — maç öncesi kontrol
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Mod: news veya match'
+        description: 'Mod: news, match veya weather'
         required: true
         default: 'news'
 
@@ -53,3 +54,24 @@ jobs:
           RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
         run: python daily_news_sms.py match --force
+
+  hava-durumu:
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'weather')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Hava durumu gonder
+        env:
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
+          RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
+        run: python daily_news_sms.py weather --force

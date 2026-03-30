@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Günlük SMS servisi — haber + altın + Galatasaray.
+Günlük SMS servisi — haber + altın + Galatasaray + hava durumu.
 
 Kullanım:
-  python daily_news_sms.py news  [--force] [--dry-run]   Sabah haber bülteni
-  python daily_news_sms.py match [--force] [--dry-run]   Maç 30dk önce kadro
+  python daily_news_sms.py news    [--force] [--dry-run]   Sabah haber bülteni
+  python daily_news_sms.py match   [--force] [--dry-run]   Maç 30dk önce kadro
+  python daily_news_sms.py weather [--force] [--dry-run]   Isparta hava durumu
 
 Sadece Nisan ayında çalışır. --force ile ay kontrolü atlanır.
 """
@@ -28,6 +29,10 @@ GEMINI_API_KEY     = os.environ["GEMINI_API_KEY"]
 
 TURKEY_TZ = timezone(timedelta(hours=3))
 GALA_ID   = 645
+
+# Isparta koordinatlari
+ISPARTA_LAT = 37.76
+ISPARTA_LON = 30.55
 
 
 # ── RSS Haber ──────────────────────────────────────────────────────────────
@@ -124,6 +129,49 @@ def fetch_lineup(fixture_id):
             prefix = f"{formation} " if formation else ""
             return prefix + ",".join(names)
     return "Kadro belirsiz"
+
+
+# ── Hava Durumu (Open-Meteo — ücretsiz, key gerekmez) ─────────────────────
+WMO_CODES = {
+    0: "Acik", 1: "Az bulutlu", 2: "Parcali bulutlu", 3: "Kapali",
+    45: "Sisli", 48: "Sisli", 51: "Hafif ciseleme", 53: "Ciseleme",
+    55: "Yogun ciseleme", 61: "Hafif yagmur", 63: "Yagmur",
+    65: "Siddetli yagmur", 71: "Hafif kar", 73: "Kar", 75: "Yogun kar",
+    80: "Saganak", 81: "Saganak", 82: "Siddetli saganak",
+    95: "Gok gurultulu firtina", 96: "Dolu", 99: "Siddetli dolu",
+}
+
+
+def fetch_weather_isparta():
+    """Isparta için bugün + yarın hava durumu verisini döner."""
+    try:
+        r = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={
+                "latitude": ISPARTA_LAT,
+                "longitude": ISPARTA_LON,
+                "daily": "temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum",
+                "timezone": "Europe/Istanbul",
+                "forecast_days": 2,
+            },
+            timeout=10,
+        )
+        r.raise_for_status()
+        d = r.json()["daily"]
+        days = []
+        for i in range(2):
+            code = d["weathercode"][i]
+            days.append({
+                "date": d["time"][i],
+                "min": d["temperature_2m_min"][i],
+                "max": d["temperature_2m_max"][i],
+                "desc": WMO_CODES.get(code, f"Kod:{code}"),
+                "rain": d["precipitation_sum"][i],
+            })
+        return days
+    except Exception as e:
+        print(f"  Hava durumu hatasi: {e}")
+        return None
 
 
 # ── Gemini AI ──────────────────────────────────────────────────────────────
@@ -237,6 +285,39 @@ def build_match_sms():
     return "\n".join(lines)[:MAX_SMS]
 
 
+def build_weather_sms():
+    """Isparta hava durumu — Gemini ile özetlenir."""
+    print("Isparta hava durumu cekiliyor...")
+    days = fetch_weather_isparta()
+    if not days:
+        print("  Veri alinamadi.")
+        return None
+
+    raw = ""
+    for d in days:
+        raw += f"{d['date']}: {d['desc']}, {d['min']:.0f}-{d['max']:.0f}C, yagis {d['rain']:.1f}mm\n"
+    print(f"  {raw.strip()}")
+
+    prompt = (
+        f"Asagidaki hava durumu verisini Isparta icin tek bir Turkce SMS'e ozetle. "
+        f"SMS en fazla {MAX_SMS} karakter olmali. Sadece SMS metnini yaz, baska bir sey yazma. "
+        f"Turkce karakterler kullanma (c, g, i, o, s, u kullan). "
+        f"Bugun ve yarin icin sicaklik ve durumu kisa yaz.\n\n{raw}"
+    )
+    print("Gemini ile ozetleniyor...")
+    sms = summarize_with_gemini(prompt)
+    if sms and len(sms) <= MAX_SMS:
+        return sms
+    if sms:
+        return sms[:MAX_SMS]
+    # fallback
+    print("  Fallback: ham veri kullaniliyor")
+    lines = []
+    for d in days:
+        lines.append(f"{d['date'][5:]}: {d['desc']} {d['min']:.0f}/{d['max']:.0f}C")
+    return ("Isparta " + ", ".join(lines))[:MAX_SMS]
+
+
 # ── Twilio ─────────────────────────────────────────────────────────────────
 def send_sms(body):
     client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
@@ -251,13 +332,14 @@ def send_sms(body):
 # ── Ana Akış ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     args = sys.argv[1:]
-    mode = "news" if "news" in args else ("match" if "match" in args else None)
+    modes = {"news", "match", "weather"}
+    mode = next((m for m in modes if m in args), None)
     dry_run = "--dry-run" in args
     force = "--force" in args
     now_tr = datetime.now(TURKEY_TZ)
 
     if not mode:
-        print("Kullanim: python daily_news_sms.py [news|match] [--dry-run] [--force]")
+        print("Kullanim: python daily_news_sms.py [news|match|weather] [--dry-run] [--force]")
         sys.exit(1)
 
     if now_tr.month != 4 and not force:
@@ -266,7 +348,8 @@ if __name__ == "__main__":
 
     print(f"=== {now_tr.strftime('%Y-%m-%d %H:%M')} TR — mod: {mode} ===\n")
 
-    sms = build_news_sms() if mode == "news" else build_match_sms()
+    builders = {"news": build_news_sms, "match": build_match_sms, "weather": build_weather_sms}
+    sms = builders[mode]()
 
     if sms is None:
         sys.exit(0)
