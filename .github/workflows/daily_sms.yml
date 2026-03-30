@@ -1,0 +1,32 @@
+name: Galatasaray Maç Öncesi SMS
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # Her 30 dakikada bir çalışır
+  workflow_dispatch:           # Manuel test için
+
+jobs:
+  check-and-send:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Bağımlılıkları yükle
+        run: pip install -r requirements.txt
+
+      - name: Kontrol et ve SMS gönder
+        env:
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
+          RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+        run: python daily_news_sms.py
