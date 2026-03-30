@@ -1,27 +1,27 @@
-name: Galatasaray Maç Öncesi SMS
+name: Galatasaray SMS Servisi
 
 on:
   schedule:
-    - cron: '*/30 * * * *'   # Her 30 dakikada bir çalışır
-  workflow_dispatch:           # Manuel test için
+    - cron: '0 5 * * *'      # Her sabah 08:00 TR (UTC+3) — haber bülteni
+    - cron: '*/30 * * * *'   # Her 30 dakika — maç öncesi kontrol
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Mod (news veya match)'
+        required: true
+        default: 'news'
 
 jobs:
-  check-and-send:
+  sabah-bulteni:
+    if: github.event_name == 'schedule' && (github.event.schedule == '0 5 * * *') || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'news')
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Python kur
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
-      - name: Bağımlılıkları yükle
-        run: pip install -r requirements.txt
-
-      - name: Kontrol et ve SMS gönder
+      - run: pip install -r requirements.txt
+      - name: Sabah haber bülteni gönder
         env:
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
@@ -29,4 +29,23 @@ jobs:
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
           RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
-        run: python daily_news_sms.py
+        run: python daily_news_sms.py news
+
+  mac-oncesi-uyari:
+    if: github.event_name == 'schedule' && (github.event.schedule == '*/30 * * * *') || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'match')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Maç öncesi uyarı kontrol et
+        env:
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
+          RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+        run: python daily_news_sms.py match
