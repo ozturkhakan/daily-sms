@@ -30,6 +30,8 @@ GEMINI_API_KEY     = os.environ["GEMINI_API_KEY"]
 
 TURKEY_TZ = timezone(timedelta(hours=3))
 GALA_ID   = 645
+TURKEY_ID = 777  # Milli takim — test icin gecici
+TEAM_IDS  = [GALA_ID, TURKEY_ID]
 
 # Isparta koordinatlari
 ISPARTA_LAT = 37.76
@@ -101,20 +103,21 @@ def _football(path, params):
 
 
 def find_upcoming_match():
-    """20-50 dakika içinde başlayacak GS maçını döner, yoksa None."""
+    """20-50 dakika içinde başlayacak takip edilen takım maçını döner, yoksa None."""
     now = datetime.now(timezone.utc)
-    data = _football("fixtures", {
-        "team": GALA_ID,
-        "date": str(now.date()),
-        "status": "NS",
-    })
-    for fix in data.get("response", []):
-        match_time = datetime.fromisoformat(
-            fix["fixture"]["date"].replace("Z", "+00:00")
-        )
-        mins = (match_time - now).total_seconds() / 60
-        if 20 <= mins <= 50:
-            return fix
+    for team_id in TEAM_IDS:
+        data = _football("fixtures", {
+            "team": team_id,
+            "date": str(now.date()),
+            "status": "NS",
+        })
+        for fix in data.get("response", []):
+            match_time = datetime.fromisoformat(
+                fix["fixture"]["date"].replace("Z", "+00:00")
+            )
+            mins = (match_time - now).total_seconds() / 60
+            if 20 <= mins <= 50:
+                return fix
     return None
 
 
@@ -133,16 +136,17 @@ def fetch_lineup(fixture_id):
 
 
 def find_live_match():
-    """Bugün oynanan/oynanacak GS maçının fixture bilgisini döner."""
+    """Bugün oynanan/oynanacak takip edilen takım maçının fixture bilgisini döner."""
     now = datetime.now(timezone.utc)
-    for status in ["1H", "HT", "2H", "NS"]:
-        data = _football("fixtures", {
-            "team": GALA_ID,
-            "date": str(now.date()),
-            "status": status,
-        })
-        if data.get("response"):
-            return data["response"][0]
+    for team_id in TEAM_IDS:
+        for status in ["1H", "HT", "2H", "NS"]:
+            data = _football("fixtures", {
+                "team": team_id,
+                "date": str(now.date()),
+                "status": status,
+            })
+            if data.get("response"):
+                return data["response"][0]
     return None
 
 

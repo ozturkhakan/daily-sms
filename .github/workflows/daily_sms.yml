@@ -8,6 +8,8 @@ on:
     - cron: '0 17 22 4 *'         # 22 Nisan kupa 20:00 TR — kadro SMS
     - cron: '45 16 4,8,12,18,26 4 *'  # Maç günleri 19:45 TR — canlı takip başla
     - cron: '15 17 22 4 *'        # 22 Nisan kupa 20:15 TR — canlı takip başla
+    - cron: '15 18 31 3 *'        # TEST: Kosova-Turkiye 21:15 TR — kadro
+    - cron: '30 18 31 3 *'        # TEST: Kosova-Turkiye 21:30 TR — canlı takip
   workflow_dispatch:
     inputs:
       mode:
@@ -40,7 +42,7 @@ jobs:
   mac-oncesi-uyari:
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && (github.event.schedule == '30 16 4,8,12,18,26 4 *' || github.event.schedule == '0 17 22 4 *')) ||
+      (github.event_name == 'schedule' && (github.event.schedule == '30 16 4,8,12,18,26 4 *' || github.event.schedule == '0 17 22 4 *' || github.event.schedule == '15 18 31 3 *')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'match')
     steps:
       - uses: actions/checkout@v4
@@ -61,7 +63,7 @@ jobs:
   canli-mac-takip:
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && (github.event.schedule == '45 16 4,8,12,18,26 4 *' || github.event.schedule == '15 17 22 4 *')) ||
+      (github.event_name == 'schedule' && (github.event.schedule == '45 16 4,8,12,18,26 4 *' || github.event.schedule == '15 17 22 4 *' || github.event.schedule == '30 18 31 3 *')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live')
     steps:
       - uses: actions/checkout@v4
