@@ -143,13 +143,13 @@ def build_news_sms():
     lines = [f"GUNLUK BULTEN {today}", ""]
 
     lines.append("[DUNYA]")
-    for h in world[:4]:
-        lines.append(f"- {h[:90]}")
+    for h in world[:3]:
+        lines.append(f"- {h[:60]}")
     lines.append("")
 
     lines.append("[TURKIYE]")
-    for h in turkey[:3]:
-        lines.append(f"- {h[:90]}")
+    for h in turkey[:2]:
+        lines.append(f"- {h[:60]}")
     lines.append("")
 
     lines.append(f"[ALTIN] {gold}")
