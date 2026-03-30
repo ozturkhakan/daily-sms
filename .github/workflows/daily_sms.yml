@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Mod: news, match veya weather'
+        description: 'Mod: news, match, weather veya live'
         required: true
         default: 'news'
 
@@ -54,6 +54,28 @@ jobs:
           RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
         run: python daily_news_sms.py match --force
+
+  canli-mac-takip:
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '*/30 * * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Canli gol takibi
+        timeout-minutes: 160
+        env:
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+          TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
+          RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
+        run: python daily_news_sms.py live --force
 
   hava-durumu:
     runs-on: ubuntu-latest

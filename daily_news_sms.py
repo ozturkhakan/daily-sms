@@ -6,6 +6,7 @@ Kullanım:
   python daily_news_sms.py news    [--force] [--dry-run]   Sabah haber bülteni
   python daily_news_sms.py match   [--force] [--dry-run]   Maç 30dk önce kadro
   python daily_news_sms.py weather [--force] [--dry-run]   Isparta hava durumu
+  python daily_news_sms.py live    [--force] [--dry-run]   Canli mac gol takibi
 
 Sadece Nisan ayında çalışır. --force ile ay kontrolü atlanır.
 """
@@ -129,6 +130,51 @@ def fetch_lineup(fixture_id):
             prefix = f"{formation} " if formation else ""
             return prefix + ",".join(names)
     return "Kadro belirsiz"
+
+
+def find_live_match():
+    """Bugün oynanan/oynanacak GS maçının fixture bilgisini döner."""
+    now = datetime.now(timezone.utc)
+    for status in ["1H", "HT", "2H", "NS"]:
+        data = _football("fixtures", {
+            "team": GALA_ID,
+            "date": str(now.date()),
+            "status": status,
+        })
+        if data.get("response"):
+            return data["response"][0]
+    return None
+
+
+def fetch_match_events(fixture_id):
+    """Maç olaylarını (goller) döner."""
+    data = _football("fixtures/events", {"fixture": fixture_id})
+    goals = []
+    for ev in data.get("response", []):
+        if ev.get("type") == "Goal":
+            goals.append({
+                "time": ev["time"]["elapsed"],
+                "team_id": ev["team"]["id"],
+                "team": ev["team"]["name"],
+                "player": ev["player"]["name"].split()[-1],
+                "detail": ev.get("detail", ""),
+            })
+    return goals
+
+
+def fetch_live_score(fixture_id):
+    """Canlı skor bilgisini döner."""
+    data = _football("fixtures", {"id": fixture_id})
+    if not data.get("response"):
+        return None
+    fix = data["response"][0]
+    return {
+        "home": fix["teams"]["home"]["name"],
+        "away": fix["teams"]["away"]["name"],
+        "home_goals": fix["goals"]["home"] or 0,
+        "away_goals": fix["goals"]["away"] or 0,
+        "status": fix["fixture"]["status"]["short"],
+    }
 
 
 # ── Hava Durumu (Open-Meteo — ücretsiz, key gerekmez) ─────────────────────
@@ -336,6 +382,82 @@ def build_weather_sms():
     return sms[:MAX_SMS]
 
 
+# ── Canli Mac Takip ─────────────────────────────────────────────────────
+LIVE_POLL_INTERVAL = 120  # saniye (2dk)
+LIVE_MAX_DURATION = 150 * 60  # saniye (2.5 saat)
+FINISHED_STATUSES = {"FT", "AET", "PEN", "PST", "CANC", "ABD", "AWD", "WO"}
+
+
+def run_live_tracker(dry_run=False):
+    """GS maçı başlayana kadar bekle, sonra 2dk'da bir gol kontrol et."""
+    print("Canli mac aranıyor...")
+    match = find_live_match()
+    if not match:
+        print("Bugun GS maci yok.")
+        return
+
+    fixture_id = match["fixture"]["id"]
+    home = match["teams"]["home"]["name"]
+    away = match["teams"]["away"]["name"]
+    print(f"Mac bulundu: {home} - {away} (fixture {fixture_id})")
+
+    # Mac henuz baslamadiysa baslayacagini bekle
+    status = match["fixture"]["status"]["short"]
+    if status == "NS":
+        match_time = datetime.fromisoformat(
+            match["fixture"]["date"].replace("Z", "+00:00")
+        )
+        wait = (match_time - datetime.now(timezone.utc)).total_seconds()
+        if wait > 0:
+            print(f"Mac baslamasina {wait/60:.0f}dk, bekleniyor...")
+            time.sleep(min(wait + 60, LIVE_MAX_DURATION))  # +1dk margin
+
+    seen_goals = set()
+    start_time = time.monotonic()
+
+    while time.monotonic() - start_time < LIVE_MAX_DURATION:
+        score = fetch_live_score(fixture_id)
+        if not score:
+            print("  Skor alinamadi, tekrar deneniyor...")
+            time.sleep(LIVE_POLL_INTERVAL)
+            continue
+
+        print(f"  [{score['status']}] {score['home']} {score['home_goals']}-{score['away_goals']} {score['away']}")
+
+        # Mac bitti mi?
+        if score["status"] in FINISHED_STATUSES:
+            sms = f"BIT! {score['home']} {score['home_goals']}-{score['away_goals']} {score['away']}"
+            print(f"Mac bitti: {sms}")
+            if not dry_run:
+                send_sms(sms[:MAX_SMS])
+                print("Mac sonu SMS gonderildi.")
+            else:
+                print(f"Dry run — SMS: {sms}")
+            return
+
+        # Yeni gol var mi?
+        goals = fetch_match_events(fixture_id)
+        for g in goals:
+            goal_key = (g["time"], g["player"])
+            if goal_key in seen_goals:
+                continue
+            seen_goals.add(goal_key)
+
+            og = " (KK)" if "Own" in g.get("detail", "") else ""
+            pen = " (P)" if "Penalty" in g.get("detail", "") else ""
+            sms = f"GOL! {g['player']}{og}{pen} {g['time']}' {score['home']} {score['home_goals']}-{score['away_goals']} {score['away']}"
+            print(f"  YENi GOL: {sms}")
+            if not dry_run:
+                send_sms(sms[:MAX_SMS])
+                print(f"  SMS gonderildi.")
+            else:
+                print(f"  Dry run — SMS: {sms}")
+
+        time.sleep(LIVE_POLL_INTERVAL)
+
+    print("Max sure doldu, cikiliyor.")
+
+
 # ── Twilio ─────────────────────────────────────────────────────────────────
 def send_sms(body):
     client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
@@ -350,14 +472,14 @@ def send_sms(body):
 # ── Ana Akış ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     args = sys.argv[1:]
-    modes = {"news", "match", "weather"}
+    modes = {"news", "match", "weather", "live"}
     mode = next((m for m in modes if m in args), None)
     dry_run = "--dry-run" in args
     force = "--force" in args
     now_tr = datetime.now(TURKEY_TZ)
 
     if not mode:
-        print("Kullanim: python daily_news_sms.py [news|match|weather] [--dry-run] [--force]")
+        print("Kullanim: python daily_news_sms.py [news|match|weather|live] [--dry-run] [--force]")
         sys.exit(1)
 
     if now_tr.month != 4 and not force:
@@ -365,6 +487,11 @@ if __name__ == "__main__":
         sys.exit(0)
 
     print(f"=== {now_tr.strftime('%Y-%m-%d %H:%M')} TR — mod: {mode} ===\n")
+
+    # Live mode: uzun-calisan tracker
+    if mode == "live":
+        run_live_tracker(dry_run=dry_run)
+        sys.exit(0)
 
     builders = {"news": build_news_sms, "match": build_match_sms, "weather": build_weather_sms}
     sms = builders[mode]()
