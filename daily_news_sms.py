@@ -142,16 +142,17 @@ def build_news_sms():
     gold = fetch_gold_price()
     print(f"  {gold}")
 
-    today = datetime.now(TURKEY_TZ).strftime("%d/%m")
-    lines = [f"BULTEN {today}"]
-
-    for h in world[:2]:
-        lines.append(f"-{h[:35]}")
-
-    for h in turkey[:1]:
-        lines.append(f"-{h[:35]}")
-
-    lines.append(f"Altin:{gold}")
+    gold_line = f"Altin:{gold}"
+    remaining = MAX_SMS - len(gold_line) - 1  # 1 for newline before gold
+    headlines = world[:2] + turkey[:1]
+    lines = []
+    for h in headlines:
+        # reserve space for newlines between remaining headlines
+        budget = remaining - sum(len(l) + 1 for l in lines)
+        if budget < 20:
+            break
+        lines.append(h[:budget].rstrip())
+    lines.append(gold_line)
 
     sms = "\n".join(lines)
     return sms[:MAX_SMS]
