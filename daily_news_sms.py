@@ -66,10 +66,10 @@ def fetch_gold_price():
         usd_try = float(r2.json()["rates"]["TRY"])
 
         gram = (xau_usd * usd_try) / 31.1035
-        return f"{gram:,.0f} TL/gram (USD/TRY: {usd_try:.2f})"
+        return f"{gram:,.0f}TL/g"
     except Exception as e:
         print(f"  Altin hatasi: {e}")
-        return "Veri alinamadi"
+        return "??"
 
 
 # ── Football API ───────────────────────────────────────────────────────────
@@ -111,22 +111,25 @@ def find_upcoming_match():
 
 
 def fetch_lineup(fixture_id):
-    """GS ilk 11'ini döner."""
+    """GS ilk 11'ini döner (sadece soyadlar)."""
     data = _football("fixtures/lineups", {"fixture": fixture_id})
     for team in data.get("response", []):
         if team["team"]["id"] != GALA_ID:
             continue
         formation = team.get("formation", "")
-        names = [p["player"]["name"] for p in team.get("startXI", [])]
+        names = [p["player"]["name"].split()[-1] for p in team.get("startXI", [])]
         if names:
-            prefix = f"[{formation}] " if formation else ""
-            return prefix + ", ".join(names)
-    return "Kadro henuz aciklanmadi"
+            prefix = f"{formation} " if formation else ""
+            return prefix + ",".join(names)
+    return "Kadro belirsiz"
 
 
 # ── SMS Formatlama ─────────────────────────────────────────────────────────
+MAX_SMS = 160  # tek segment GSM-7
+
+
 def build_news_sms():
-    """Sabah haber bülteni: dünya + Türkiye + altın."""
+    """Sabah haber bülteni: dünya + Türkiye + altın — tek SMS segmentine sığar."""
     print("Dunya haberleri cekiliyor...")
     world = fetch_world_news()
     print(f"  {len(world)} baslik")
@@ -139,26 +142,23 @@ def build_news_sms():
     gold = fetch_gold_price()
     print(f"  {gold}")
 
-    today = datetime.now(TURKEY_TZ).strftime("%d/%m/%Y")
-    lines = [f"GUNLUK BULTEN {today}", ""]
+    today = datetime.now(TURKEY_TZ).strftime("%d/%m")
+    lines = [f"BULTEN {today}"]
 
-    lines.append("[DUNYA]")
-    for h in world[:3]:
-        lines.append(f"- {h[:60]}")
-    lines.append("")
+    for h in world[:2]:
+        lines.append(f"-{h[:35]}")
 
-    lines.append("[TURKIYE]")
-    for h in turkey[:2]:
-        lines.append(f"- {h[:60]}")
-    lines.append("")
+    for h in turkey[:1]:
+        lines.append(f"-{h[:35]}")
 
-    lines.append(f"[ALTIN] {gold}")
+    lines.append(f"Altin:{gold}")
 
-    return "\n".join(lines)
+    sms = "\n".join(lines)
+    return sms[:MAX_SMS]
 
 
 def build_match_sms():
-    """Maç öncesi uyarı: maç bilgisi + kadro."""
+    """Maç öncesi uyarı — tek SMS segmentine sığar."""
     print("Mac kontrolu...")
     match = find_upcoming_match()
     if not match:
@@ -168,12 +168,10 @@ def build_match_sms():
     fixture_id = match["fixture"]["id"]
     home = match["teams"]["home"]["name"]
     away = match["teams"]["away"]["name"]
-    league = match["league"]["name"]
     match_time = datetime.fromisoformat(
         match["fixture"]["date"].replace("Z", "+00:00")
     )
     tr_time = match_time.astimezone(TURKEY_TZ).strftime("%H:%M")
-    today = datetime.now(TURKEY_TZ).strftime("%d/%m/%Y")
 
     print(f"  Mac: {home} - {away}")
     print("Kadro cekiliyor...")
@@ -181,15 +179,12 @@ def build_match_sms():
     print(f"  {lineup[:60]}...")
 
     lines = [
-        f"MAC UYARISI {today}",
-        "",
-        f"{home} - {away}",
-        f"{league}, saat {tr_time}",
-        "",
-        f"[KADRO]",
+        f"MAC {tr_time}",
+        f"{home}-{away}",
         lineup,
     ]
-    return "\n".join(lines)
+    sms = "\n".join(lines)
+    return sms[:MAX_SMS]
 
 
 # ── Twilio ─────────────────────────────────────────────────────────────────
