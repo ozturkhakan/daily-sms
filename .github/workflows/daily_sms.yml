@@ -1,4 +1,4 @@
-name: Galatasaray SMS Servisi
+name: SMS Servisi
 
 on:
   schedule:
