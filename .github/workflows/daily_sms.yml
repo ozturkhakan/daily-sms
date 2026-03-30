@@ -3,7 +3,7 @@ name: Galatasaray SMS Servisi
 on:
   schedule:
     - cron: '0 5 * * *'      # Her sabah 08:00 TR — haber bülteni
-    - cron: '0 4 * * *'      # Her sabah 07:00 TR — hava durumu
+    - cron: '0 2 * * *'      # Her sabah 05:00 TR — hava durumu
     - cron: '*/30 * * * *'   # Her 30 dakika — maç öncesi kontrol
   workflow_dispatch:
     inputs:
@@ -58,7 +58,7 @@ jobs:
   hava-durumu:
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && github.event.schedule == '0 4 * * *') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * *') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'weather')
     steps:
       - uses: actions/checkout@v4
