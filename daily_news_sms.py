@@ -328,7 +328,7 @@ def build_weather_sms():
         part = f"{labels[i]}:{d['desc']} {d['min']:.0f}/{d['max']:.0f}C"
         if d["rain_hours"]:
             rng = _rain_range(d["rain_hours"])
-            part += f" Yagis:{rng}"
+            part += f" Yagis:{rng}({d['rain']:.1f}mm)"
         lines.append(part)
 
     sms = "\n".join(lines)
