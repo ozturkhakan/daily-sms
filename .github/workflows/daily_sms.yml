@@ -29,7 +29,7 @@ jobs:
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
           RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
-        run: python daily_news_sms.py news
+        run: python daily_news_sms.py news --force
 
   mac-oncesi-uyari:
     if: github.event_name == 'schedule' && (github.event.schedule == '*/30 * * * *') || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'match')
