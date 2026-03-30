@@ -30,7 +30,7 @@ GALA_ID   = 645
 # ── Yardımcı ───────────────────────────────────────────────────────────────
 def gemini(prompt: str) -> str:
     client = genai.Client(api_key=GEMINI_API_KEY)
-    resp   = client.models.generate_content(model="gemini-1.5-flash", contents=prompt)
+    resp   = client.models.generate_content(model="gemini-1.5-flash-8b", contents=prompt)
     return resp.text
 
 
