@@ -2,26 +2,28 @@ name: Galatasaray SMS Servisi
 
 on:
   schedule:
-    - cron: '0 5 * * *'      # Her sabah 08:00 TR (UTC+3) — haber bülteni
+    - cron: '0 5 * * *'      # Her sabah 08:00 TR — haber bülteni
     - cron: '*/30 * * * *'   # Her 30 dakika — maç öncesi kontrol
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Mod (news veya match)'
+        description: 'Mod: news veya match'
         required: true
         default: 'news'
 
 jobs:
   sabah-bulteni:
-    if: github.event_name == 'schedule' && (github.event.schedule == '0 5 * * *') || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'news')
     runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 5 * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'news')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
-      - name: Sabah haber bülteni gönder
+      - name: Haber bülteni gönder
         env:
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
@@ -32,15 +34,17 @@ jobs:
         run: python daily_news_sms.py news --force
 
   mac-oncesi-uyari:
-    if: github.event_name == 'schedule' && (github.event.schedule == '*/30 * * * *') || (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'match')
     runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '*/30 * * * *') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'match')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
-      - name: Maç öncesi uyarı kontrol et
+      - name: Maç öncesi kontrol
         env:
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
@@ -48,4 +52,4 @@ jobs:
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
           RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
-        run: python daily_news_sms.py match
+        run: python daily_news_sms.py match --force
