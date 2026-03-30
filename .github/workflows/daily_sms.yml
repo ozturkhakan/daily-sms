@@ -2,9 +2,12 @@ name: SMS Servisi
 
 on:
   schedule:
-    - cron: '0 5 * * *'      # Her sabah 08:00 TR — haber bülteni
-    - cron: '0 2 * * *'      # Her sabah 05:00 TR — hava durumu
-    - cron: '*/30 * * * *'   # Her 30 dakika — maç öncesi kontrol
+    - cron: '0 5 * * *'           # Her sabah 08:00 TR — haber bülteni
+    - cron: '0 2 * * *'           # Her sabah 05:00 TR — hava durumu
+    - cron: '30 16 4,8,12,18,26 4 *'  # Maç günleri 19:30 TR — kadro SMS
+    - cron: '0 17 22 4 *'         # 22 Nisan kupa 20:00 TR — kadro SMS
+    - cron: '45 16 4,8,12,18,26 4 *'  # Maç günleri 19:45 TR — canlı takip başla
+    - cron: '15 17 22 4 *'        # 22 Nisan kupa 20:15 TR — canlı takip başla
   workflow_dispatch:
     inputs:
       mode:
@@ -37,7 +40,7 @@ jobs:
   mac-oncesi-uyari:
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && github.event.schedule == '*/30 * * * *') ||
+      (github.event_name == 'schedule' && (github.event.schedule == '30 16 4,8,12,18,26 4 *' || github.event.schedule == '0 17 22 4 *')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'match')
     steps:
       - uses: actions/checkout@v4
@@ -58,7 +61,7 @@ jobs:
   canli-mac-takip:
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && github.event.schedule == '*/30 * * * *') ||
+      (github.event_name == 'schedule' && (github.event.schedule == '45 16 4,8,12,18,26 4 *' || github.event.schedule == '15 17 22 4 *')) ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live')
     steps:
       - uses: actions/checkout@v4
