@@ -143,7 +143,7 @@ WMO_CODES = {
 
 
 def fetch_weather_isparta():
-    """Isparta için bugün + yarın hava durumu verisini döner."""
+    """Isparta için bugün + yarın hava durumu + saatlik yağış verisini döner."""
     try:
         r = requests.get(
             "https://api.open-meteo.com/v1/forecast",
@@ -151,22 +151,34 @@ def fetch_weather_isparta():
                 "latitude": ISPARTA_LAT,
                 "longitude": ISPARTA_LON,
                 "daily": "temperature_2m_max,temperature_2m_min,weathercode,precipitation_sum",
+                "hourly": "precipitation",
                 "timezone": "Europe/Istanbul",
                 "forecast_days": 2,
             },
             timeout=10,
         )
         r.raise_for_status()
-        d = r.json()["daily"]
+        data = r.json()
+        d = data["daily"]
+        h = data["hourly"]
+
         days = []
         for i in range(2):
             code = d["weathercode"][i]
+            # saatlik yagis: her gun 24 saat (index 0-23, 24-47)
+            start = i * 24
+            rain_hours = [
+                int(h["time"][start + j][11:13])
+                for j in range(24)
+                if h["precipitation"][start + j] > 0
+            ]
             days.append({
                 "date": d["time"][i],
                 "min": d["temperature_2m_min"][i],
                 "max": d["temperature_2m_max"][i],
                 "desc": WMO_CODES.get(code, f"Kod:{code}"),
                 "rain": d["precipitation_sum"][i],
+                "rain_hours": rain_hours,
             })
         return days
     except Exception as e:
@@ -285,37 +297,43 @@ def build_match_sms():
     return "\n".join(lines)[:MAX_SMS]
 
 
+def _rain_range(hours):
+    """Yağışlı saatleri kısa aralık formatına çevirir: '09-12,15-17'"""
+    if not hours:
+        return ""
+    ranges = []
+    start = hours[0]
+    end = hours[0]
+    for h in hours[1:]:
+        if h == end + 1:
+            end = h
+        else:
+            ranges.append(f"{start:02d}-{end + 1:02d}")
+            start = end = h
+    ranges.append(f"{start:02d}-{end + 1:02d}")
+    return ",".join(ranges)
+
+
 def build_weather_sms():
-    """Isparta hava durumu — Gemini ile özetlenir."""
+    """Isparta hava durumu — Gemini olmadan, düzgün format."""
     print("Isparta hava durumu cekiliyor...")
     days = fetch_weather_isparta()
     if not days:
         print("  Veri alinamadi.")
         return None
 
-    raw = ""
-    for d in days:
-        raw += f"{d['date']}: {d['desc']}, {d['min']:.0f}-{d['max']:.0f}C, yagis {d['rain']:.1f}mm\n"
-    print(f"  {raw.strip()}")
+    labels = ["Bugun", "Yarin"]
+    lines = ["Isparta"]
+    for i, d in enumerate(days):
+        part = f"{labels[i]}:{d['desc']} {d['min']:.0f}/{d['max']:.0f}C"
+        if d["rain_hours"]:
+            rng = _rain_range(d["rain_hours"])
+            part += f" Yagis:{rng}"
+        lines.append(part)
 
-    prompt = (
-        f"Asagidaki hava durumu verisini Isparta icin tek bir Turkce SMS'e ozetle. "
-        f"SMS en fazla {MAX_SMS} karakter olmali. Sadece SMS metnini yaz, baska bir sey yazma. "
-        f"Turkce karakterler kullanma (c, g, i, o, s, u kullan). "
-        f"Bugun ve yarin icin sicaklik ve durumu kisa yaz.\n\n{raw}"
-    )
-    print("Gemini ile ozetleniyor...")
-    sms = summarize_with_gemini(prompt)
-    if sms and len(sms) <= MAX_SMS:
-        return sms
-    if sms:
-        return sms[:MAX_SMS]
-    # fallback
-    print("  Fallback: ham veri kullaniliyor")
-    lines = []
-    for d in days:
-        lines.append(f"{d['date'][5:]}: {d['desc']} {d['min']:.0f}/{d['max']:.0f}C")
-    return ("Isparta " + ", ".join(lines))[:MAX_SMS]
+    sms = "\n".join(lines)
+    print(f"  {sms}")
+    return sms[:MAX_SMS]
 
 
 # ── Twilio ─────────────────────────────────────────────────────────────────
