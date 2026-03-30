@@ -11,11 +11,11 @@ from datetime import datetime, timedelta, timezone
 
 import feedparser
 import requests
-import anthropic
+import google.generativeai as genai
 from twilio.rest import Client
 
 # ── Config ─────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY  = os.environ["ANTHROPIC_API_KEY"]
+GEMINI_API_KEY     = os.environ["GEMINI_API_KEY"]
 TWILIO_ACCOUNT_SID = os.environ["TWILIO_ACCOUNT_SID"]
 TWILIO_AUTH_TOKEN  = os.environ["TWILIO_AUTH_TOKEN"]
 TWILIO_FROM_NUMBER = os.environ["TWILIO_FROM_NUMBER"]
@@ -154,13 +154,10 @@ Kurallar:
 Kaynak:
 {raw}"""
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    msg = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=500,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return msg.content[0].text
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    resp  = model.generate_content(prompt)
+    return resp.text
 
 
 # ── Twilio ─────────────────────────────────────────────────────────────────
