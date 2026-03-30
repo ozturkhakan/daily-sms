@@ -11,7 +11,7 @@ from datetime import datetime, timedelta, timezone
 
 import feedparser
 import requests
-import google.generativeai as genai
+from google import genai
 from twilio.rest import Client
 
 # ── Config ─────────────────────────────────────────────────────────────────
@@ -154,9 +154,8 @@ Kurallar:
 Kaynak:
 {raw}"""
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    resp  = model.generate_content(prompt)
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    resp   = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     return resp.text
 
 
