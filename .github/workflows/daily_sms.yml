@@ -30,6 +30,7 @@ jobs:
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
           RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
         run: python daily_news_sms.py news --force
 
   mac-oncesi-uyari:
@@ -50,4 +51,5 @@ jobs:
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
           RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+          GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
         run: python daily_news_sms.py match --force
