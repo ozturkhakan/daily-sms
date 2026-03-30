@@ -11,6 +11,7 @@ Sadece Nisan ayında çalışır. --force ile ay kontrolü atlanır.
 
 import os
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 
 import feedparser
@@ -126,19 +127,37 @@ def fetch_lineup(fixture_id):
 
 
 # ── Gemini AI ──────────────────────────────────────────────────────────────
+GEMINI_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+]
+
+
 def summarize_with_gemini(prompt):
-    """Gemini API ile metin özetler. Hata olursa None döner."""
-    try:
-        r = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
-            json={"contents": [{"parts": [{"text": prompt}]}]},
-            timeout=15,
-        )
-        r.raise_for_status()
-        return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except Exception as e:
-        print(f"  Gemini hatasi: {e}")
-        return None
+    """Gemini API ile metin özetler. 429'da retry + fallback model dener."""
+    for model in GEMINI_MODELS:
+        for attempt in range(3):
+            try:
+                r = requests.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
+                    json={"contents": [{"parts": [{"text": prompt}]}]},
+                    timeout=15,
+                )
+                if r.status_code == 429:
+                    wait = 2 ** attempt
+                    print(f"  429 rate limit ({model}), {wait}s bekleniyor...")
+                    time.sleep(wait)
+                    continue
+                r.raise_for_status()
+                text = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                print(f"  Basarili: {model} (deneme {attempt + 1})")
+                return text
+            except Exception as e:
+                print(f"  Gemini hatasi ({model}, deneme {attempt + 1}): {e}")
+                break
+        print(f"  {model} basarisiz, sonraki model deneniyor...")
+    return None
 
 
 # ── SMS Formatlama ─────────────────────────────────────────────────────────
