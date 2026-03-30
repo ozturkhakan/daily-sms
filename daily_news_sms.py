@@ -130,14 +130,14 @@ def fetch_lineup(fixture_id):
 GEMINI_MODELS = [
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
 ]
+RETRY_WAITS = [5, 15, 30]  # saniye — free tier throttle icin agresif backoff
 
 
 def summarize_with_gemini(prompt):
     """Gemini API ile metin özetler. 429'da retry + fallback model dener."""
     for model in GEMINI_MODELS:
-        for attempt in range(3):
+        for attempt, wait in enumerate(RETRY_WAITS):
             try:
                 r = requests.post(
                     f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}",
@@ -145,7 +145,6 @@ def summarize_with_gemini(prompt):
                     timeout=15,
                 )
                 if r.status_code == 429:
-                    wait = 2 ** attempt
                     print(f"  429 rate limit ({model}), {wait}s bekleniyor...")
                     time.sleep(wait)
                     continue
