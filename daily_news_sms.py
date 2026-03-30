@@ -23,6 +23,7 @@ TWILIO_AUTH_TOKEN  = os.environ["TWILIO_AUTH_TOKEN"]
 TWILIO_FROM_NUMBER = os.environ["TWILIO_FROM_NUMBER"]
 TO_PHONE_NUMBER    = os.environ["TO_PHONE_NUMBER"]
 RAPIDAPI_KEY       = os.environ["RAPIDAPI_KEY"]
+GEMINI_API_KEY     = os.environ["GEMINI_API_KEY"]
 
 TURKEY_TZ = timezone(timedelta(hours=3))
 GALA_ID   = 645
@@ -124,12 +125,28 @@ def fetch_lineup(fixture_id):
     return "Kadro belirsiz"
 
 
+# ── Gemini AI ──────────────────────────────────────────────────────────────
+def summarize_with_gemini(prompt):
+    """Gemini API ile metin özetler. Hata olursa None döner."""
+    try:
+        r = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as e:
+        print(f"  Gemini hatasi: {e}")
+        return None
+
+
 # ── SMS Formatlama ─────────────────────────────────────────────────────────
 MAX_SMS = 160  # tek segment GSM-7
 
 
 def build_news_sms():
-    """Sabah haber bülteni: dünya + Türkiye + altın — tek SMS segmentine sığar."""
+    """Sabah haber bülteni: dünya + Türkiye + altın — Gemini ile özetlenir."""
     print("Dunya haberleri cekiliyor...")
     world = fetch_world_news()
     print(f"  {len(world)} baslik")
@@ -142,24 +159,28 @@ def build_news_sms():
     gold = fetch_gold_price()
     print(f"  {gold}")
 
-    gold_line = f"Altin:{gold}"
-    remaining = MAX_SMS - len(gold_line) - 1  # 1 for newline before gold
-    headlines = world[:2] + turkey[:1]
-    lines = []
-    for h in headlines:
-        # reserve space for newlines between remaining headlines
-        budget = remaining - sum(len(l) + 1 for l in lines)
-        if budget < 20:
-            break
-        lines.append(h[:budget].rstrip())
-    lines.append(gold_line)
-
-    sms = "\n".join(lines)
-    return sms[:MAX_SMS]
+    headlines = "\n".join(world[:3] + turkey[:2])
+    prompt = (
+        f"Asagidaki haber basliklarini ve altin fiyatini tek bir Turkce SMS'e ozetle. "
+        f"SMS en fazla {MAX_SMS} karakter olmali. Sadece SMS metnini yaz, baska bir sey yazma. "
+        f"Turkce karakterler kullanma (c, g, i, o, s, u kullan). Kisa ve net cumle kur.\n\n"
+        f"Basliklar:\n{headlines}\n\nAltin: {gold}"
+    )
+    print("Gemini ile ozetleniyor...")
+    sms = summarize_with_gemini(prompt)
+    if sms and len(sms) <= MAX_SMS:
+        return sms
+    if sms:
+        return sms[:MAX_SMS]
+    # fallback: AI basarisiz olursa ham baslik
+    print("  Fallback: ham basliklar kullaniliyor")
+    lines = [h[:50] for h in (world[:2] + turkey[:1])]
+    lines.append(f"Altin:{gold}")
+    return "\n".join(lines)[:MAX_SMS]
 
 
 def build_match_sms():
-    """Maç öncesi uyarı — tek SMS segmentine sığar."""
+    """Maç öncesi uyarı — Gemini ile özetlenir."""
     print("Mac kontrolu...")
     match = find_upcoming_match()
     if not match:
@@ -169,6 +190,7 @@ def build_match_sms():
     fixture_id = match["fixture"]["id"]
     home = match["teams"]["home"]["name"]
     away = match["teams"]["away"]["name"]
+    league = match["league"]["name"]
     match_time = datetime.fromisoformat(
         match["fixture"]["date"].replace("Z", "+00:00")
     )
@@ -179,13 +201,22 @@ def build_match_sms():
     lineup = fetch_lineup(fixture_id)
     print(f"  {lineup[:60]}...")
 
-    lines = [
-        f"MAC {tr_time}",
-        f"{home}-{away}",
-        lineup,
-    ]
-    sms = "\n".join(lines)
-    return sms[:MAX_SMS]
+    prompt = (
+        f"Asagidaki mac bilgisini tek bir Turkce SMS'e ozetle. "
+        f"SMS en fazla {MAX_SMS} karakter olmali. Sadece SMS metnini yaz. "
+        f"Turkce karakterler kullanma (c, g, i, o, s, u kullan).\n\n"
+        f"Mac: {home} vs {away}\nLig: {league}\nSaat: {tr_time}\nKadro: {lineup}"
+    )
+    print("Gemini ile ozetleniyor...")
+    sms = summarize_with_gemini(prompt)
+    if sms and len(sms) <= MAX_SMS:
+        return sms
+    if sms:
+        return sms[:MAX_SMS]
+    # fallback
+    print("  Fallback: ham bilgi kullaniliyor")
+    lines = [f"MAC {tr_time}", f"{home}-{away}", lineup]
+    return "\n".join(lines)[:MAX_SMS]
 
 
 # ── Twilio ─────────────────────────────────────────────────────────────────
