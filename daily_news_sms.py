@@ -25,7 +25,7 @@ TWILIO_ACCOUNT_SID = os.environ["TWILIO_ACCOUNT_SID"]
 TWILIO_AUTH_TOKEN  = os.environ["TWILIO_AUTH_TOKEN"]
 TWILIO_FROM_NUMBER = os.environ["TWILIO_FROM_NUMBER"]
 TO_PHONE_NUMBER    = os.environ["TO_PHONE_NUMBER"]
-RAPIDAPI_KEY       = os.environ["RAPIDAPI_KEY"]
+APISPORTS_KEY      = os.environ["APISPORTS_KEY"]
 GEMINI_API_KEY     = os.environ["GEMINI_API_KEY"]
 
 TURKEY_TZ = timezone(timedelta(hours=3))
@@ -84,13 +84,12 @@ def fetch_gold_price():
 
 # ── Football API ───────────────────────────────────────────────────────────
 def _football(path, params):
-    """api-football RapidAPI çağrısı. Hata olursa boş dict döner."""
+    """api-sports.io çağrısı. Hata olursa boş dict döner."""
     try:
         r = requests.get(
-            f"https://api-football-v1.p.rapidapi.com/v3/{path}",
+            f"https://v3.football.api-sports.io/{path}",
             headers={
-                "X-RapidAPI-Key": RAPIDAPI_KEY,
-                "X-RapidAPI-Host": "api-football-v1.p.rapidapi.com",
+                "x-apisports-key": APISPORTS_KEY,
             },
             params=params,
             timeout=10,
@@ -105,13 +104,16 @@ def _football(path, params):
 def find_upcoming_match():
     """20-50 dakika içinde başlayacak takip edilen takım maçını döner, yoksa None."""
     now = datetime.now(timezone.utc)
-    for team_id in TEAM_IDS:
+    for i, team_id in enumerate(TEAM_IDS):
+        if i > 0:
+            time.sleep(2)
         data = _football("fixtures", {
             "team": team_id,
             "date": str(now.date()),
-            "status": "NS",
         })
         for fix in data.get("response", []):
+            if fix["fixture"]["status"]["short"] != "NS":
+                continue
             match_time = datetime.fromisoformat(
                 fix["fixture"]["date"].replace("Z", "+00:00")
             )
@@ -135,18 +137,22 @@ def fetch_lineup(fixture_id):
     return "Kadro belirsiz"
 
 
+LIVE_STATUSES = {"1H", "HT", "2H", "ET", "BT", "P", "NS"}
+
+
 def find_live_match():
     """Bugün oynanan/oynanacak takip edilen takım maçının fixture bilgisini döner."""
     now = datetime.now(timezone.utc)
-    for team_id in TEAM_IDS:
-        for status in ["1H", "HT", "2H", "NS"]:
-            data = _football("fixtures", {
-                "team": team_id,
-                "date": str(now.date()),
-                "status": status,
-            })
-            if data.get("response"):
-                return data["response"][0]
+    for i, team_id in enumerate(TEAM_IDS):
+        if i > 0:
+            time.sleep(2)
+        data = _football("fixtures", {
+            "team": team_id,
+            "date": str(now.date()),
+        })
+        for fix in data.get("response", []):
+            if fix["fixture"]["status"]["short"] in LIVE_STATUSES:
+                return fix
     return None
 
 
@@ -259,12 +265,22 @@ def summarize_with_gemini(prompt):
                     time.sleep(wait)
                     continue
                 r.raise_for_status()
-                text = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                data = r.json()
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    print(f"  Bos candidates ({model}), deneme {attempt + 1}: {data.get('promptFeedback', '')}")
+                    time.sleep(wait)
+                    continue
+                text = candidates[0]["content"]["parts"][0]["text"].strip()
+                if not text:
+                    print(f"  Bos yanit ({model}), deneme {attempt + 1}")
+                    time.sleep(wait)
+                    continue
                 print(f"  Basarili: {model} (deneme {attempt + 1})")
                 return text
             except Exception as e:
                 print(f"  Gemini hatasi ({model}, deneme {attempt + 1}): {e}")
-                break
+                time.sleep(wait)
         print(f"  {model} basarisiz, sonraki model deneniyor...")
     return None
 

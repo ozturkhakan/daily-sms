@@ -3,7 +3,7 @@ name: SMS Servisi
 on:
   schedule:
     - cron: '0 5 * * *'           # Her sabah 08:00 TR — haber bülteni
-    - cron: '0 2 * * *'           # Her sabah 05:00 TR — hava durumu
+    - cron: '0 1 * * *'           # Her sabah 05:30 TR hedefe ~04:00 UTC (GH ~45dk geciktiriyor)
     - cron: '30 16 4,8,12,18,26 4 *'  # Maç günleri 19:30 TR — kadro SMS
     - cron: '0 17 22 4 *'         # 22 Nisan kupa 20:00 TR — kadro SMS
     - cron: '45 16 4,8,12,18,26 4 *'  # Maç günleri 19:45 TR — canlı takip başla
@@ -35,7 +35,7 @@ jobs:
           TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
-          RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+          APISPORTS_KEY:      ${{ secrets.APISPORTS_KEY }}
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
         run: python daily_news_sms.py news --force
 
@@ -56,7 +56,7 @@ jobs:
           TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
-          RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+          APISPORTS_KEY:      ${{ secrets.APISPORTS_KEY }}
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
         run: python daily_news_sms.py match --force
 
@@ -78,14 +78,14 @@ jobs:
           TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
-          RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+          APISPORTS_KEY:      ${{ secrets.APISPORTS_KEY }}
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
         run: python daily_news_sms.py live --force
 
   hava-durumu:
     runs-on: ubuntu-latest
     if: |
-      (github.event_name == 'schedule' && github.event.schedule == '0 2 * * *') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 1 * * *') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'weather')
     steps:
       - uses: actions/checkout@v4
@@ -99,6 +99,6 @@ jobs:
           TWILIO_AUTH_TOKEN:  ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
           TO_PHONE_NUMBER:    ${{ secrets.TO_PHONE_NUMBER }}
-          RAPIDAPI_KEY:       ${{ secrets.RAPIDAPI_KEY }}
+          APISPORTS_KEY:      ${{ secrets.APISPORTS_KEY }}
           GEMINI_API_KEY:     ${{ secrets.GEMINI_API_KEY }}
         run: python daily_news_sms.py weather --force
