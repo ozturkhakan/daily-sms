@@ -110,6 +110,7 @@ def find_upcoming_match():
         data = _football("fixtures", {
             "team": team_id,
             "date": str(now.date()),
+            "season": 2025,
         })
         for fix in data.get("response", []):
             if fix["fixture"]["status"]["short"] != "NS":
@@ -125,7 +126,7 @@ def find_upcoming_match():
 
 def fetch_lineup(fixture_id):
     """GS ilk 11'ini döner (sadece soyadlar)."""
-    data = _football("fixtures/lineups", {"fixture": fixture_id})
+    data = _football("fixtures/lineups", {"fixture": fixture_id, "season": 2025})
     for team in data.get("response", []):
         if team["team"]["id"] != GALA_ID:
             continue
@@ -149,6 +150,7 @@ def find_live_match():
         data = _football("fixtures", {
             "team": team_id,
             "date": str(now.date()),
+            "season": 2025,
         })
         for fix in data.get("response", []):
             if fix["fixture"]["status"]["short"] in LIVE_STATUSES:
@@ -158,7 +160,7 @@ def find_live_match():
 
 def fetch_match_events(fixture_id):
     """Maç olaylarını (goller) döner."""
-    data = _football("fixtures/events", {"fixture": fixture_id})
+    data = _football("fixtures/events", {"fixture": fixture_id, "season": 2025})
     goals = []
     for ev in data.get("response", []):
         if ev.get("type") == "Goal":
@@ -174,7 +176,7 @@ def fetch_match_events(fixture_id):
 
 def fetch_live_score(fixture_id):
     """Canlı skor bilgisini döner."""
-    data = _football("fixtures", {"id": fixture_id})
+    data = _football("fixtures", {"id": fixture_id, "season": 2025})
     if not data.get("response"):
         return None
     fix = data["response"][0]
